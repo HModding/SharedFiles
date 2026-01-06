@@ -1,4 +1,4 @@
-require(path.join(path.resolve(process.cwd()), 'public', 'hutilities', 'hutils.shared')); // Load shared utilities
+require(path.join(path.resolve(process.cwd()), 'sharedfiles', 'hutilities', 'hutils.shared')); // Load shared utilities
 
 global.doRequest = async function ({ url, type = "POST", body = {}, returnAsJson = true, headers = {} }) {
     const response = await fetch(url, {
@@ -23,6 +23,8 @@ global.getEJSArgs = function (req, res, page) {
         successMessages: successMessages.length > 0 ? successMessages : null,
         currentPage: page,
         title: 'HModding',
+        // Include all res.locals properties (including userMessages, maintenanceWarning, etc.)
+        ...res.locals
     }
 }
 
@@ -38,6 +40,7 @@ global.getAccountFromRequest = function (req) {
             discord_id: req.user.discord_id,
             agreed_terms: req.user.agreed_terms,
             profile_picture: req.user.profile_picture,
+            rank: req.user.rank,
         }
         return account;
     }
