@@ -28,10 +28,9 @@
   align-items: center;
   justify-content: space-between;
   text-align: left;
-  overflow: hidden;
 }
 
-/* Selected text truncation */
+/* Selected text truncation - prevents horizontal overflow */
 .custom-select-dropdown .dropdown-selected-text {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -106,18 +105,6 @@
   align-items: center;
   gap: 0.5rem;
   text-decoration: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Dropdown item text truncation */
-.custom-select-absolute-menu .dropdown-item span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex: 1;
 }
 
 /* Checkmark icon (hidden by default) */

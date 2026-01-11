@@ -53,7 +53,7 @@ const CustomSelectRegistry = {
   }
 };
 
-// Global listener to close all custom selects when clicking anywhere or interacting with other elements
+// Global listener to close all custom selects when clicking anywhere
 (function() {
   let listenerAdded = false;
   
@@ -61,19 +61,9 @@ const CustomSelectRegistry = {
     if (listenerAdded) return;
     listenerAdded = true;
     
-    // Close all on any mousedown (catches clicks on anything)
-    document.addEventListener('mousedown', (e) => {
+    // Close all on click only - focusin was causing issues with Bootstrap modals
+    document.addEventListener('click', (e) => {
       // Check if the click is on a custom select dropdown or its menu
-      const isOnCustomSelect = e.target.closest('.custom-select-dropdown');
-      const isOnAbsoluteMenu = e.target.closest('.custom-select-absolute-menu');
-      
-      if (!isOnCustomSelect && !isOnAbsoluteMenu) {
-        CustomSelectRegistry.closeAllOnInteraction();
-      }
-    }, true);
-    
-    // Close all on focus change to other inputs
-    document.addEventListener('focusin', (e) => {
       const isOnCustomSelect = e.target.closest('.custom-select-dropdown');
       const isOnAbsoluteMenu = e.target.closest('.custom-select-absolute-menu');
       
@@ -310,6 +300,9 @@ const CustomSelect = {
     // Remove Bootstrap dropdown behavior
     button.removeAttribute('data-bs-toggle');
     button.removeAttribute('data-bs-display');
+    
+    // Check if dropdown is inside a Bootstrap modal
+    const parentModal = dropdown.closest('.modal');
 
     // Create absolute positioned menu container
     let absoluteMenu = null;
@@ -341,7 +334,16 @@ const CustomSelect = {
       // Add click handler to the absolute menu
       absoluteMenu.addEventListener('click', handleItemClick);
 
-      document.body.appendChild(absoluteMenu);
+      // Append to modal if inside one (avoids Bootstrap focus trap issues), otherwise to body
+      if (parentModal) {
+        parentModal.appendChild(absoluteMenu);
+      } else {
+        document.body.appendChild(absoluteMenu);
+      }
+      
+      // Store reference on the dropdown for cleanup
+      dropdown._customSelectAbsoluteMenu = absoluteMenu;
+      
       return absoluteMenu;
     };
 
