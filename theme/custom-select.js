@@ -1,13 +1,14 @@
 /**
  * Custom Select Dropdown Component
  * A styled Bootstrap dropdown that behaves like a native select element
+ * Supports single and multiple selection modes
  *
  * Usage:
  * 1. Include custom-select.css in your HTML
  * 2. Create the HTML structure with the custom-select-dropdown class
  * 3. Call CustomSelect.init() to initialize
  *
- * Example:
+ * Example (Single Select):
  * <div class="dropdown custom-select-dropdown" id="mySelect">
  *   <button class="btn btn-secondary dropdown-toggle w-100 text-start d-flex align-items-center justify-content-between" type="button" data-bs-toggle="dropdown">
  *     <span class="dropdown-selected-text">Select an option</span>
@@ -19,9 +20,15 @@
  *   <input type="hidden" id="mySelectInput" value="">
  * </div>
  *
+ * Example (Multiple Select):
+ * <div class="dropdown custom-select-dropdown custom-select-multiple" id="myMultiSelect">
+ *   ...same structure...
+ * </div>
+ *
  * <script>
  *   CustomSelect.init('mySelect', {
- *     onChange: (value, text) => console.log('Selected:', value, text)
+ *     multiple: true, // Enable multiple selection
+ *     onChange: (values, texts) => console.log('Selected:', values, texts)
  *   });
  * </script>
  */
@@ -86,6 +93,9 @@ const CustomSelect = {
    * Initialize an existing custom select dropdown HTML structure
    * @param {HTMLElement|string} dropdown - Dropdown element, selector, or ID
    * @param {Object} options - Configuration options
+   * @param {boolean} options.multiple - Enable multiple selection mode
+   * @param {string} options.placeholder - Placeholder when nothing selected (multiple mode)
+   * @param {string} options.selectedText - Text format for multiple selection (use {count} placeholder)
    * @param {Function} options.onChange - Callback when value changes
    * @returns {Object} - API object with methods to control the dropdown
    */
@@ -111,22 +121,37 @@ const CustomSelect = {
 
     const menu = dropdownEl.querySelector('.dropdown-menu');
     const hiddenInput = dropdownEl.querySelector('input[type="hidden"]');
+    const isMultiple = options.multiple || dropdownEl.classList.contains('custom-select-multiple');
+    
+    // Add multiple class if specified in options
+    if (options.multiple) {
+      dropdownEl.classList.add('custom-select-multiple');
+    }
 
     CustomSelect.setupBehavior({
       dropdown: dropdownEl,
       menu,
       hiddenInput,
+      multiple: isMultiple,
+      placeholder: options.placeholder || 'Select options',
+      selectedText: options.selectedText || '{count} selected',
       onChange: options.onChange
     });
 
     return {
       element: dropdownEl,
-      getValue: () => hiddenInput ? hiddenInput.value : null,
-      setValue: (newValue) => CustomSelect.setValue(dropdownEl, newValue),
+      getValue: () => {
+        if (!hiddenInput) return isMultiple ? [] : null;
+        if (isMultiple) {
+          return hiddenInput.value ? hiddenInput.value.split(',').filter(v => v) : [];
+        }
+        return hiddenInput.value;
+      },
+      setValue: (newValue) => CustomSelect.setValue(dropdownEl, newValue, isMultiple),
       setOptions: (newOptions, newValue) => {
-        CustomSelect.populateOptions(menu, newOptions, newValue || (hiddenInput ? hiddenInput.value : ''));
+        CustomSelect.populateOptions(menu, newOptions, newValue || (hiddenInput ? hiddenInput.value : ''), isMultiple);
         if (newValue !== undefined) {
-          CustomSelect.setValue(dropdownEl, newValue);
+          CustomSelect.setValue(dropdownEl, newValue, isMultiple);
         }
       },
       addOption: (option) => CustomSelect.addOption(menu, option, hiddenInput ? hiddenInput.value : ''),
@@ -289,13 +314,19 @@ const CustomSelect = {
    * @param {HTMLElement} config.dropdown - The dropdown container element
    * @param {HTMLElement} config.menu - The dropdown menu element
    * @param {HTMLInputElement} config.hiddenInput - Hidden input to store value
+   * @param {boolean} config.multiple - Enable multiple selection
+   * @param {string} config.placeholder - Placeholder text for multiple mode
+   * @param {string} config.selectedText - Text format for multiple selection
    * @param {Function} config.onChange - Callback when value changes
    */
-  setupBehavior: function({ dropdown, menu, hiddenInput, onChange }) {
+  setupBehavior: function({ dropdown, menu, hiddenInput, multiple = false, placeholder = 'Select options', selectedText = '{count} selected', onChange }) {
     if (!dropdown || !menu) return;
 
     const button = dropdown.querySelector('.dropdown-toggle');
-    const selectedText = button ? button.querySelector('.dropdown-selected-text') : null;
+    const selectedTextEl = button ? button.querySelector('.dropdown-selected-text') : null;
+    
+    // Store config for later use
+    dropdown._customSelectConfig = { multiple, placeholder, selectedText };
 
     // Remove Bootstrap dropdown behavior
     button.removeAttribute('data-bs-toggle');
@@ -313,7 +344,7 @@ const CustomSelect = {
 
       // Clone the menu and make it absolute
       absoluteMenu = menu.cloneNode(true);
-      absoluteMenu.className = 'dropdown-menu dropdown-menu-dark custom-select-absolute-menu';
+      absoluteMenu.className = 'dropdown-menu dropdown-menu-dark custom-select-absolute-menu' + (multiple ? ' custom-select-multiple' : '');
       absoluteMenu.style.cssText = `
         position: fixed !important;
         z-index: 999999 !important;
@@ -459,36 +490,88 @@ const CustomSelect = {
       const iconHtml = CustomSelect.getIconHtml(item);
       const text = CustomSelect.getCleanText(item);
 
-      // Update UI
-      if (selectedText) {
-        selectedText.innerHTML = iconHtml + text;
-      }
-      if (hiddenInput) {
-        hiddenInput.value = value;
-      }
-
-      // Update active state in both menus
-      [menu, absoluteMenu].forEach(m => {
-        if (m) {
-          m.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
-          const correspondingItem = m.querySelector(`[data-value="${value}"]`);
-          if (correspondingItem) {
-            correspondingItem.classList.add('active');
+      if (multiple) {
+        // Multiple selection mode
+        const isActive = item.classList.contains('active');
+        
+        // Toggle active state in both menus
+        [menu, absoluteMenu].forEach(m => {
+          if (m) {
+            const correspondingItem = m.querySelector(`[data-value="${value}"]`);
+            if (correspondingItem) {
+              correspondingItem.classList.toggle('active', !isActive);
+            }
+          }
+        });
+        
+        // Get all selected values
+        const selectedItems = (absoluteMenu || menu).querySelectorAll('.dropdown-item.active');
+        const selectedValues = Array.from(selectedItems).map(i => i.dataset.value);
+        const selectedTexts = Array.from(selectedItems).map(i => CustomSelect.getCleanText(i));
+        
+        // Update hidden input with comma-separated values
+        if (hiddenInput) {
+          hiddenInput.value = selectedValues.join(',');
+        }
+        
+        // Update display text
+        if (selectedTextEl) {
+          if (selectedValues.length === 0) {
+            selectedTextEl.innerHTML = `<i class="fa-solid fa-layer-group me-2"></i>${placeholder}`;
+          } else if (selectedValues.length === 1) {
+            // Show the single selected item with its icon
+            const singleItem = (absoluteMenu || menu).querySelector('.dropdown-item.active');
+            const singleIcon = singleItem ? CustomSelect.getIconHtml(singleItem) : '';
+            selectedTextEl.innerHTML = singleIcon + selectedTexts[0];
+          } else {
+            selectedTextEl.innerHTML = `<i class="fa-solid fa-check-double me-2"></i>${selectedText.replace('{count}', selectedValues.length)}`;
           }
         }
-      });
+        
+        // Don't close menu in multiple mode
+        
+        // Trigger change callback with arrays
+        if (onChange) {
+          await onChange(selectedValues, selectedTexts, dropdown);
+        }
 
-      hideMenu();
+        // Dispatch custom event
+        dropdown.dispatchEvent(new CustomEvent('change', {
+          detail: { values: selectedValues, texts: selectedTexts }
+        }));
+      } else {
+        // Single selection mode (existing behavior)
+        // Update UI
+        if (selectedTextEl) {
+          selectedTextEl.innerHTML = iconHtml + text;
+        }
+        if (hiddenInput) {
+          hiddenInput.value = value;
+        }
 
-      // Trigger change callback
-      if (onChange) {
-        await onChange(value, text, dropdown);
+        // Update active state in both menus
+        [menu, absoluteMenu].forEach(m => {
+          if (m) {
+            m.querySelectorAll('.dropdown-item').forEach(i => i.classList.remove('active'));
+            const correspondingItem = m.querySelector(`[data-value="${value}"]`);
+            if (correspondingItem) {
+              correspondingItem.classList.add('active');
+            }
+          }
+        });
+
+        hideMenu();
+
+        // Trigger change callback
+        if (onChange) {
+          await onChange(value, text, dropdown);
+        }
+
+        // Dispatch custom event
+        dropdown.dispatchEvent(new CustomEvent('change', {
+          detail: { value, text }
+        }));
       }
-
-      // Dispatch custom event
-      dropdown.dispatchEvent(new CustomEvent('change', {
-        detail: { value, text }
-      }));
     };
 
     // Add click handler to original menu
@@ -537,31 +620,73 @@ const CustomSelect = {
   /**
    * Set the value of a custom select dropdown
    * @param {HTMLElement} dropdown - The dropdown container element
-   * @param {string} value - The value to set
+   * @param {string|Array} value - The value(s) to set
+   * @param {boolean} isMultiple - Whether this is a multiple select
    */
-  setValue: function(dropdown, value) {
+  setValue: function(dropdown, value, isMultiple = false) {
     if (!dropdown) return;
 
     const menu = dropdown.querySelector('.dropdown-menu');
+    const absoluteMenu = dropdown._customSelectAbsoluteMenu; // Get the absolute menu if it exists
     const hiddenInput = dropdown.querySelector('input[type="hidden"]');
-    const selectedText = dropdown.querySelector('.dropdown-selected-text');
+    const selectedTextEl = dropdown.querySelector('.dropdown-selected-text');
+    const config = dropdown._customSelectConfig || {};
+    const multiple = isMultiple || config.multiple || dropdown.classList.contains('custom-select-multiple');
 
-    if (hiddenInput) {
-      hiddenInput.value = value;
-    }
+    if (multiple) {
+      // Multiple mode - value can be array or comma-separated string
+      const values = Array.isArray(value) ? value : (value ? value.split(',').filter(v => v) : []);
+      
+      if (hiddenInput) {
+        hiddenInput.value = values.join(',');
+      }
 
-    // Update active state and display text
-    if (menu) {
-      menu.querySelectorAll('.dropdown-item').forEach(item => {
-        if (item.dataset.value === value) {
-          item.classList.add('active');
-          if (selectedText) {
-            // Get the icon HTML if present, plus clean text
-            const iconHtml = CustomSelect.getIconHtml(item);
-            selectedText.innerHTML = iconHtml + CustomSelect.getCleanText(item);
-          }
+      // Update active states in both menus
+      [menu, absoluteMenu].forEach(m => {
+        if (m) {
+          m.querySelectorAll('.dropdown-item').forEach(item => {
+            item.classList.toggle('active', values.includes(item.dataset.value));
+          });
+        }
+      });
+
+      // Update display text
+      if (selectedTextEl) {
+        const selectedItems = menu.querySelectorAll('.dropdown-item.active');
+        const selectedTexts = Array.from(selectedItems).map(i => CustomSelect.getCleanText(i));
+        
+        if (values.length === 0) {
+          selectedTextEl.innerHTML = `<i class="fa-solid fa-layer-group me-2"></i>${config.placeholder || 'Select options'}`;
+        } else if (values.length === 1) {
+          const singleItem = menu.querySelector('.dropdown-item.active');
+          const singleIcon = singleItem ? CustomSelect.getIconHtml(singleItem) : '';
+          selectedTextEl.innerHTML = singleIcon + selectedTexts[0];
         } else {
-          item.classList.remove('active');
+          const textFormat = config.selectedText || '{count} selected';
+          selectedTextEl.innerHTML = `<i class="fa-solid fa-check-double me-2"></i>${textFormat.replace('{count}', values.length)}`;
+        }
+      }
+    } else {
+      // Single mode (existing behavior)
+      if (hiddenInput) {
+        hiddenInput.value = value;
+      }
+
+      // Update active state and display text in both menus
+      [menu, absoluteMenu].forEach(m => {
+        if (m) {
+          m.querySelectorAll('.dropdown-item').forEach(item => {
+            if (item.dataset.value === value) {
+              item.classList.add('active');
+              if (selectedTextEl && m === menu) {
+                // Get the icon HTML if present, plus clean text
+                const iconHtml = CustomSelect.getIconHtml(item);
+                selectedTextEl.innerHTML = iconHtml + CustomSelect.getCleanText(item);
+              }
+            } else {
+              item.classList.remove('active');
+            }
+          });
         }
       });
     }
@@ -577,7 +702,8 @@ const CustomSelect = {
     const icons = item.querySelectorAll('i.fa-solid, i.fa-regular, i.fa-brands, i.fas, i.far, i.fab');
     for (const icon of icons) {
       if (!icon.classList.contains('check-icon')) {
-        return icon.outerHTML + ' ';
+        // Return the outerHTML as-is - the icon should already have me-2 for spacing
+        return icon.outerHTML;
       }
     }
     return '';
