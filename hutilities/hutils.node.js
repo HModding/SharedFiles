@@ -41,6 +41,9 @@ global.getAccountFromRequest = function (req) {
             agreed_terms: req.user.agreed_terms,
             profile_picture: req.user.profile_picture,
             rank: req.user.rank,
+            rank_name: req.user.rank_name,
+            rank_color: req.user.rank_color,
+            rank_icon: req.user.rank_icon,
         }
         return account;
     }
