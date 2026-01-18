@@ -4,16 +4,18 @@ global.sleep = async function (ms) {
 }
 
 global.sanitizeUsername = function (username, forceLength = true) {
-  // Remove all non-alphanumeric characters and replace spaces with underscores & 3-20 characters
-  const sanitized = username.replace(/[^a-zA-Z0-9_]/g, '').replace(/\s+/g, '_');
+  // Remove all characters except alphanumeric and URL-safe chars: underscore, apostrophe, hyphen
+  // Then collapse consecutive special characters to single occurrence
+  let sanitized = username.replace(/[^a-zA-Z0-9_'\-]/g, '').replace(/\s+/g, '_');
+  sanitized = sanitized.replace(/[_'\-]{2,}/g, match => match[0]); // Collapse consecutive special chars
   if (forceLength) {
     return sanitized.length < 3 ? 'user' : sanitized.length > 20 ? sanitized.substring(0, 20) : sanitized;
   } else { return sanitized; }
 };
 
 global.isUsernameValid = function (username) {
-  // Check if the username is between 3 and 20 characters long and contains only alphanumeric characters and underscores
-  const regex = /^[a-zA-Z0-9_]{3,20}$/;
+  // Must be 3-20 chars, contain at least one letter, only alphanumeric/underscore/apostrophe/hyphen, no consecutive special chars
+  const regex = /^(?=.*[a-zA-Z])(?!.*[_'\-]{2})[a-zA-Z0-9_'\-]{3,20}$/;
   return regex.test(username);
 };
 
