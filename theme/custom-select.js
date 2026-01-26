@@ -150,11 +150,21 @@ const CustomSelect = {
       setValue: (newValue) => CustomSelect.setValue(dropdownEl, newValue, isMultiple),
       setOptions: (newOptions, newValue) => {
         CustomSelect.populateOptions(menu, newOptions, newValue || (hiddenInput ? hiddenInput.value : ''), isMultiple);
+        // Also update the absolute menu if it exists (the cloned menu used for display)
+        if (dropdownEl._customSelectAbsoluteMenu) {
+          CustomSelect.populateOptions(dropdownEl._customSelectAbsoluteMenu, newOptions, newValue || (hiddenInput ? hiddenInput.value : ''), isMultiple);
+        }
         if (newValue !== undefined) {
           CustomSelect.setValue(dropdownEl, newValue, isMultiple);
         }
       },
-      addOption: (option) => CustomSelect.addOption(menu, option, hiddenInput ? hiddenInput.value : ''),
+      addOption: (option) => {
+        CustomSelect.addOption(menu, option, hiddenInput ? hiddenInput.value : '');
+        // Also add to absolute menu if it exists
+        if (dropdownEl._customSelectAbsoluteMenu) {
+          CustomSelect.addOption(dropdownEl._customSelectAbsoluteMenu, option, hiddenInput ? hiddenInput.value : '');
+        }
+      },
       disable: () => dropdownEl.querySelector('.dropdown-toggle').disabled = true,
       enable: () => dropdownEl.querySelector('.dropdown-toggle').disabled = false
     };
@@ -241,11 +251,21 @@ const CustomSelect = {
       setValue: (newValue) => CustomSelect.setValue(dropdown, newValue),
       setOptions: (newOptions, newValue) => {
         CustomSelect.populateOptions(menu, newOptions, newValue || hiddenInput.value);
+        // Also update the absolute menu if it exists
+        if (dropdown._customSelectAbsoluteMenu) {
+          CustomSelect.populateOptions(dropdown._customSelectAbsoluteMenu, newOptions, newValue || hiddenInput.value);
+        }
         if (newValue !== undefined) {
           CustomSelect.setValue(dropdown, newValue);
         }
       },
-      addOption: (option) => CustomSelect.addOption(menu, option, hiddenInput.value),
+      addOption: (option) => {
+        CustomSelect.addOption(menu, option, hiddenInput.value);
+        // Also add to absolute menu if it exists
+        if (dropdown._customSelectAbsoluteMenu) {
+          CustomSelect.addOption(dropdown._customSelectAbsoluteMenu, option, hiddenInput.value);
+        }
+      },
       disable: () => dropdown.querySelector('.dropdown-toggle').disabled = true,
       enable: () => dropdown.querySelector('.dropdown-toggle').disabled = false
     };
@@ -254,7 +274,7 @@ const CustomSelect = {
   /**
    * Populate dropdown menu with options
    * @param {HTMLElement} menu - The dropdown menu element
-   * @param {Array} options - Array of {value, text, disabled?} objects
+   * @param {Array} options - Array of {value, text, disabled?, icon?, imageUrl?} objects
    * @param {string} currentValue - Currently selected value
    */
   populateOptions: function(menu, options, currentValue = '') {
@@ -263,6 +283,15 @@ const CustomSelect = {
     menu.innerHTML = options.map(option => {
       const isActive = option.value === currentValue;
       const isDisabled = option.disabled === true;
+      
+      // Build icon/image HTML if provided
+      let iconHtml = '';
+      if (option.imageUrl) {
+        iconHtml = `<img src="${CustomSelect.escapeHtml(option.imageUrl)}" class="me-2" style="width: 20px; height: 20px; object-fit: contain; border-radius: 3px;" alt="">`;
+      } else if (option.icon) {
+        iconHtml = `<i class="${CustomSelect.escapeHtml(option.icon)} me-2" style="width: 16px; text-align: center;"></i>`;
+      }
+      
       return `
         <li>
           <a class="dropdown-item${isActive ? ' active' : ''}${isDisabled ? ' disabled' : ''}"
@@ -270,7 +299,7 @@ const CustomSelect = {
              data-value="${CustomSelect.escapeHtml(option.value)}"
              ${isDisabled ? 'aria-disabled="true"' : ''}>
             <i class="fa-solid fa-check check-icon"></i>
-            <span>${CustomSelect.escapeHtml(option.text)}</span>
+            ${iconHtml}<span>${CustomSelect.escapeHtml(option.text)}</span>
           </a>
         </li>
       `;
